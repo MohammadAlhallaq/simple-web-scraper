@@ -1,45 +1,78 @@
 package main
 
 import (
-	"bytes"
+	"encoding/csv"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly"
-	"simpleWebScraper/elements"
+	"os"
 )
 
 type visitUrl struct {
-	domain   string
-	fullPath string
+	domain, fullPath string
+}
+
+type job struct {
+	title    string
+	url      string
+	company  string
+	location string
+	since    string
 }
 
 func main() {
 	visitingUrl := &visitUrl{
-		domain:   "my.majarra.com",
-		fullPath: "https://my.majarra.com",
+		domain:   "larajobs.com",
+		fullPath: "https://larajobs.com/",
 	}
+	var jobs []job
 
 	c := colly.NewCollector(colly.AllowedDomains(visitingUrl.domain))
 	c.AllowURLRevisit = true
 
-	c.OnHTML("body", func(e *colly.HTMLElement) {
+	c.OnHTML("a.job-link", func(e *colly.HTMLElement) {
+		job := job{}
 
-		reader := bytes.NewReader(e.Response.Body)
+		job.title = e.ChildText("p.text-lg")
+		job.url = e.Attr("data-url")
+		job.company = e.ChildText("p.text-sm:first-of-type")
+		job.location = e.ChildText("div.flex.items-center.mr-4.mb-1")
+		job.since = e.ChildText("div.flex.items-center.mr-4.mb-1 + div.flex.items-center")
+		jobs = append(jobs, job)
+	})
 
-		doc, err := goquery.NewDocumentFromReader(reader)
+	c.OnScraped(func(response *colly.Response) {
+		file, err := os.Create("job.csv")
 		if err != nil {
-			fmt.Println("Error parsing the body:", err)
-			return
+			fmt.Println(err.Error())
 		}
+		defer func(file *os.File) {
+			err := file.Close()
+			if err != nil {
 
-		anchor := elements.AnchorTag{
-			Links:    doc,
-			FullPath: visitingUrl.fullPath,
+			}
+		}(file)
+		writer := csv.NewWriter(file)
+
+		headers := []string{
+			"title",
+			"url",
+			"company",
+			"location",
+			"since",
 		}
-		err = anchor.Collect()
-		if err != nil {
-			fmt.Println("Error parsing the body:", err)
+		writer.Write(headers)
+
+		for _, job := range jobs {
+			record := []string{
+				job.title,
+				job.url,
+				job.company,
+				job.location,
+				job.since,
+			}
+			writer.Write(record)
 		}
+		defer writer.Flush()
 	})
 
 	c.OnRequest(func(r *colly.Request) {
