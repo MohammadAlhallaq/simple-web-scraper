@@ -73,6 +73,8 @@ func main() {
 			writer.Write(record)
 		}
 		defer writer.Flush()
+
+		fmt.Println("jobs has been scraped successfully")
 	})
 
 	c.OnRequest(func(r *colly.Request) {
